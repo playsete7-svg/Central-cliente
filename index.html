@@ -398,12 +398,16 @@ const firebaseConfig = {
         if (Array.isArray(seed.crmNotes) && !customer.crmNotes.length) customer.crmNotes = seed.crmNotes;
         return customer;
       };
-      users.forEach(user => ensure(user.id, user));
+      users.forEach(user => ensure(user.uid || user.id, { ...user, address: user.address || user.deliveryAddress || user.addresses?.[0] }));
       orders.forEach(order => {
         if (isCancelled(order) || isInternalOrder(order)) return;
-        if (!order.userId && !order.userPhone && !order.userName) return;
-        const id = order.userId || digits(order.userPhone) || `anon_${normalizeName(order.userName)}`;
-        const customer = ensure(id, { name: order.userName, email: order.userEmail, phone: order.userPhone, address: order.address });
+        const snapshot = order.customerSnapshot || {};
+        const phone = order.userPhone || snapshot.phone || "";
+        const name = order.userName || snapshot.name || "";
+        const email = order.userEmail || snapshot.email || "";
+        const id = order.userId || order.customerId || snapshot.uid || snapshot.id || digits(phone) || `anon_${normalizeName(name)}`;
+        if (!id && !phone && !name) return;
+        const customer = ensure(id, { name, email, phone, address: order.address || order.addressSnapshot || snapshot.address });
         customer.orders.push(order);
         customer.totalOrders += 1;
         const created = dateMs(order.createdAt);
@@ -671,8 +675,8 @@ const firebaseConfig = {
       search: term => state.customers.filter(customer => customerMatches(customer, term)),
       syncCustomer: async data => {
         if (!data || (!data.id && !data.phone && !data.email)) throw new Error("Informe id, telefone ou e-mail.");
-        const id = data.id || digits(data.phone) || `external_${normalizeName(data.name)}`;
-        const payload = { name: data.name || "Cliente sincronizado", email: data.email || "", phone: data.phone || "", address: data.address || "", externalSource: data.externalSource || "marketing-place", updatedAt: serverTimestamp() };
+        const id = data.id || data.uid || digits(data.phone) || `external_${normalizeName(data.name)}`;
+        const payload = { id: data.id || data.uid || "", uid: data.uid || data.id || "", name: data.name || data.displayName || "Cliente sincronizado", email: data.email || "", phone: data.phone || "", address: data.address || data.deliveryAddress || data.addressSnapshot || "", addresses: Array.isArray(data.addresses) ? data.addresses : [], savedAddresses: Array.isArray(data.savedAddresses) ? data.savedAddresses : [], defaultAddressId: data.defaultAddressId || null, externalSource: data.externalSource || "marketplace", updatedAt: serverTimestamp() };
         if (state.online) await setDoc(doc(db, "users", String(id)), payload, { merge: true });
         const index = state.users.findIndex(user => String(user.id) === String(id)); if (index >= 0) state.users[index] = { ...state.users[index], id, ...payload, updatedAt: Date.now() }; else state.users.push({ id, ...payload, updatedAt: Date.now() });
         state.customers = aggregateCustomers(state.users, state.orders); renderAll(); return state.customers.find(customer => String(customer.id) === String(id));
