@@ -497,7 +497,7 @@ const firebaseConfig = {
     function renderAll() {
       renderDashboard();
       applyFilters();
-      window.dispatchEvent(new CustomEvent("customer-base:updated", { detail: { customers: state.customers, orders: state.orders } }));
+      window.dispatchEvent(new CustomEvent("customers:system-event", { detail: { system: "customers", type: "base_updated", message: "Base de clientes atualizada", payload: { customers: state.customers, orders: state.orders } } }));
     }
 
     function openModal(id) { const modal = $(`#${id}`); if (!modal) return; modal.classList.add("open"); modal.setAttribute("aria-hidden", "false"); }
